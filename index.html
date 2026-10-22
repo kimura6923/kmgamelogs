@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ゲームタイマー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="deco" aria-hidden="true">
+    <span>☁️</span><span>⭐</span><span>☁️</span><span>🌈</span><span>✨</span>
+  </div>
+
+  <header>
+    <h1><span class="logo">🎮</span><span class="title">ゲームタイマー</span></h1>
+  </header>
+
+  <main>
+    <section class="card start-card">
+      <div class="card-head">
+        <h2>はじめる</h2>
+        <div class="head-btns">
+          <button id="speak-btn" type="button" class="mic speak" hidden></button>
+          <button id="voice-btn" type="button" class="mic" hidden>🎤 こえでいう</button>
+        </div>
+      </div>
+      <p id="voice-status" class="voice-status" hidden></p>
+
+      <form id="start-form" autocomplete="off">
+        <div class="step" data-step="kind">
+          <button type="button" class="step-head">
+            <span class="num">1</span><span class="q">なにをする？</span><span class="ans"></span>
+          </button>
+          <div class="step-body"><div class="step-inner"><div class="step-content">
+            <div id="kind-chips" class="kind-tiles"></div>
+          </div></div></div>
+        </div>
+
+        <div class="step" data-step="name">
+          <button type="button" class="step-head">
+            <span class="num">2</span><span class="q">だれ？</span><span class="ans"></span>
+          </button>
+          <div class="step-body"><div class="step-inner"><div class="step-content">
+            <div id="name-chips" class="name-chips"></div>
+            <div class="inline">
+              <input id="name" type="text" placeholder="なまえをかく" maxlength="20">
+              <button type="button" class="next" data-next="name">けってい</button>
+            </div>
+          </div></div></div>
+        </div>
+
+        <div class="step" data-step="minutes">
+          <button type="button" class="step-head">
+            <span class="num">3</span><span class="q">なんぷん？</span><span class="ans"></span>
+          </button>
+          <div class="step-body"><div class="step-inner"><div class="step-content">
+            <div id="minute-chips" class="minute-chips"></div>
+            <div class="inline">
+              <input id="minutes" type="number" min="1" max="600" step="1" inputmode="numeric" placeholder="ほかの分">
+              <button type="button" class="next" data-next="minutes">けってい</button>
+            </div>
+          </div></div></div>
+        </div>
+
+        <div class="step" data-step="ready">
+          <div class="step-body"><div class="step-inner"><div class="step-content ready">
+            <p id="ready-text" class="ready-text"></p>
+            <button type="submit" class="start-btn">スタート！🚀</button>
+            <button type="button" id="reset-form" class="link">さいしょから</button>
+          </div></div></div>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>いまやっている人</h2>
+      <p id="no-running" class="muted">いまはだれもやっていません 💤</p>
+      <ul id="running-list" class="running"></ul>
+    </section>
+
+    <section class="card">
+      <h2>きょうの合計</h2>
+      <p id="no-today" class="muted">まだ記録がありません</p>
+      <ul id="today-totals" class="totals"></ul>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>きろく</h2>
+        <button id="clear-history" type="button" class="link danger">きろくを消す</button>
+      </div>
+      <p id="no-history" class="muted">まだ記録がありません</p>
+      <div class="table-wrap">
+        <table id="history" hidden>
+          <thead>
+            <tr><th>日付</th><th>だれ</th><th>なに</th><th>宣言</th><th>開始</th><th>終了</th><th>実際</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="alarm" class="alarm" hidden>
+    <div class="alarm-box">
+      <p class="alarm-emoji">⏰</p>
+      <p id="alarm-text" class="alarm-text"></p>
+      <button id="alarm-stop" type="button" class="start-btn">おわり！</button>
+      <button id="alarm-extend" type="button" class="sub-btn">あと5分だけ…🙏</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
