@@ -8,9 +8,15 @@ const MINUTE_CHOICES = [10, 15, 30, 45, 60];
 const MINUTE_COLORS = ['#caffbf', '#fdffb6', '#ffd6a5', '#ffadad', '#bdb2ff'];
 const NAME_COLORS = ['#ff4d6d', '#3a86ff', '#8338ec', '#06a77d', '#ff8500', '#118ab2', '#d63384'];
 const KINDS = [
-  { id: 'switch2', label: 'Switch 2', say: 'スイッチツー', icon: '🎮', verb: 'あそぶ', color: '#e63946', dark: '#a4161a' },
-  { id: 'switch', label: 'Switch', say: 'スイッチ', icon: '🕹️', verb: 'あそぶ', color: '#3a86ff', dark: '#1f5fcc' },
-  { id: 'video', label: '動画', say: 'どうが', icon: '📺', verb: 'みる', color: '#ff9e00', dark: '#c76d00' },
+  { id: 'switch2', cat: 'play', label: 'Switch 2', say: 'スイッチツー', icon: '🎮', verb: 'あそぶ', color: '#e63946', dark: '#a4161a' },
+  { id: 'switch', cat: 'play', label: 'Switch', say: 'スイッチ', icon: '🕹️', verb: 'あそぶ', color: '#3a86ff', dark: '#1f5fcc' },
+  { id: 'video', cat: 'play', label: '動画', say: 'どうが', icon: '📺', verb: 'みる', color: '#ff9e00', dark: '#c76d00' },
+  { id: 'study', cat: 'study', label: '勉強', say: 'べんきょう', icon: '📚', verb: 'する', color: '#06a77d', dark: '#047857' },
+];
+// きょうの合計は「あそび」と「べんきょう」を分けて出す
+const CATS = [
+  { id: 'play', label: 'あそび', icon: '🎮', color: '#ff8500' },
+  { id: 'study', label: 'べんきょう', icon: '📚', color: '#06a77d' },
 ];
 const STEP_PROMPTS = {
   kind: 'なにをする？',
@@ -139,7 +145,8 @@ function pickVoice() {
 }
 if (canSpeak) {
   pickVoice();
-  speechSynthesis.addEventListener('voiceschanged', pickVoice);
+  // 古い iOS の speechSynthesis は addEventListener を持たないのでプロパティで登録する
+  speechSynthesis.onvoiceschanged = pickVoice;
 }
 
 const isSpeaking = () => canSpeak && speechSynthesis.speaking;
@@ -204,6 +211,12 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+// replaceChildren は iOS 14 未満にないので自前で入れ替える
+function setChildren(node, ...children) {
+  node.textContent = '';
+  node.append(...children);
+}
+
 const pad = (n) => String(n).padStart(2, '0');
 
 function fmtTime(ms) {
@@ -230,9 +243,20 @@ function isSameDay(a, b) {
 
 const findKind = (id) => KINDS.find((k) => k.id === id);
 
+// 古い iOS は ?. や ?? を読めないので使わない
+function isStudy(s) {
+  const k = findKind(s.kind);
+  return !!k && k.cat === 'study';
+}
+
 function kindText(id) {
   const k = findKind(id);
   return k ? `${k.icon} ${k.label}` : '-';
+}
+
+function kindIcon(id) {
+  const k = findKind(id);
+  return k ? k.icon : '⏱️';
 }
 
 // 名前ごとにいつも同じ色
@@ -242,7 +266,7 @@ function nameColor(name) {
   return NAME_COLORS[h % NAME_COLORS.length];
 }
 
-const elapsedMin = (s, now) => Math.round(((s.stoppedAt ?? now) - s.startAt) / 60000);
+const elapsedMin = (s, now) => Math.round(((s.stoppedAt != null ? s.stoppedAt : now) - s.startAt) / 60000);
 const isRunning = (s) => s.stoppedAt == null;
 const isOver = (s, now) => isRunning(s) && now >= s.endAt;
 
@@ -405,7 +429,7 @@ function renderReadyText() {
     p.style.background = color;
     return p;
   };
-  $('#ready-text').replaceChildren(
+  setChildren($('#ready-text'),
     pill(formName(), nameColor(formName())), ' が', el('br'),
     pill(`${kind.icon} ${kind.label}`, kind.color), ' を ',
     pill(`${formMinutes()}分`, '#2b2d42'), ` ${kind.verb}！`,
@@ -420,7 +444,7 @@ function resetForm({ silent = false } = {}) {
   goStep('kind', { silent });
 }
 
-$('#kind-chips').replaceChildren(...KINDS.map((k, i) => {
+setChildren($('#kind-chips'), ...KINDS.map((k, i) => {
   const b = el('button', { type: 'button', 'data-kind': k.id }, [
     el('span', { class: 'icon', text: k.icon }),
     el('span', { text: k.label }),
@@ -431,7 +455,7 @@ $('#kind-chips').replaceChildren(...KINDS.map((k, i) => {
   return b;
 }));
 
-$('#minute-chips').replaceChildren(...MINUTE_CHOICES.map((m, i) => {
+setChildren($('#minute-chips'), ...MINUTE_CHOICES.map((m, i) => {
   const b = el('button', { type: 'button', 'data-min': m }, [String(m), el('small', { text: '分' })]);
   b.style.setProperty('--mc', MINUTE_COLORS[i % MINUTE_COLORS.length]);
   b.style.setProperty('--i', i);
@@ -509,7 +533,8 @@ form.addEventListener('submit', (e) => {
   unlockAudio();
   playJingle();
   celebrate(form.querySelector('.start-btn'));
-  speak(`スタート！ ${formMinutes()}分たったら、おしらせするね。たのしんでね！`);
+  const cheer = findKind(selectedKind).cat === 'study' ? 'がんばってね！' : 'たのしんでね！';
+  speak(`スタート！ ${formMinutes()}分たったら、おしらせするね。${cheer}`);
   startSession(name, selectedKind, formMinutes());
   resetForm({ silent: true });
 });
@@ -527,6 +552,7 @@ $('#clear-history').addEventListener('click', () => {
 // ---------- 音声入力 ----------
 
 const KIND_PATTERNS = [
+  ['study', /勉強|べんきょう|宿題|しゅくだい|ドリル|読書|どくしょ|音読|おんどく/],
   ['switch2', /(スイッチ|すいっち|switch)\s*(2|二|ツー|つー|two)/i],
   ['switch', /スイッチ|すいっち|switch/i],
   ['video', /動画|どうが|ユーチューブ|youtube|ようつべ|ビデオ|テレビ/i],
@@ -696,14 +722,17 @@ function renderAlarm(now) {
   if (target) {
     const kind = findKind(target.kind);
     const what = kind ? `${kind.label}の` : '';
-    $('#alarm-text').textContent = `${target.name} さん、${what}${target.minutes + target.extended}分がたちました！`;
+    const praise = isStudy(target) ? 'よくがんばったね！🎉' : '';
+    $('#alarm-text').textContent = `${target.name} さん、${what}${target.minutes + target.extended}分がたちました！${praise}`;
+    $('#alarm-extend').textContent = isStudy(target) ? 'もうちょっとやる！💪' : 'あと5分だけ…🙏';
+    $('.alarm-emoji').textContent = isStudy(target) ? '🎉' : '⏰';
   }
 }
 
 // ---------- 描画 ----------
 
 function renderNameChips() {
-  $('#name-chips').replaceChildren(...recentNames().map((n, i) => {
+  setChildren($('#name-chips'), ...recentNames().map((n, i) => {
     const b = el('button', { type: 'button', 'data-name': n, text: n });
     b.style.setProperty('--nc', nameColor(n));
     b.style.setProperty('--i', i);
@@ -778,30 +807,43 @@ function renderRunning(now) {
 }
 
 function renderTodayTotals(now) {
+  // name → cat → { min, byKind }
   const totals = new Map();
   for (const s of state.sessions) {
     if (!isSameDay(s.startAt, now)) continue;
-    const t = totals.get(s.name) || { min: 0, byKind: new Map() };
+    const cat = isStudy(s) ? 'study' : 'play';
+    if (!totals.has(s.name)) totals.set(s.name, new Map());
+    const byCat = totals.get(s.name);
+    const t = byCat.get(cat) || { min: 0, byKind: new Map() };
     const m = elapsedMin(s, now);
     t.min += m;
     t.byKind.set(s.kind, (t.byKind.get(s.kind) || 0) + m);
-    totals.set(s.name, t);
+    byCat.set(cat, t);
   }
   $('#no-today').hidden = totals.size > 0;
-  const max = Math.max(30, ...[...totals.values()].map((t) => t.min));
+  const max = Math.max(30, ...[...totals.values()].flatMap((byCat) => [...byCat.values()].map((t) => t.min)));
 
-  $('#today-totals').replaceChildren(...[...totals].map(([name, t]) => {
-    const fill = el('span');
-    fill.style.width = `${(t.min / max) * 100}%`;
-    const li = el('li', {}, [
-      el('span', { class: 'name', text: name }),
-      el('div', { class: 'bar' }, [fill]),
-      el('span', { class: 'min', text: `${t.min}分` }),
-      el('span', {
-        class: 'breakdown',
-        text: [...t.byKind].map(([k, m]) => `${findKind(k)?.icon ?? '⏱️'}${m}分`).join('　'),
-      }),
-    ]);
+  setChildren($('#today-totals'), ...[...totals].map(([name, byCat]) => {
+    const rows = CATS.filter((c) => byCat.has(c.id)).flatMap((c) => {
+      const t = byCat.get(c.id);
+      const fill = el('span');
+      fill.style.width = `${(t.min / max) * 100}%`;
+      fill.style.background = c.color;
+      const row = [
+        el('span', { class: 'label', text: `${c.icon} ${c.label}` }),
+        el('div', { class: 'bar' }, [fill]),
+        el('span', { class: 'min', text: `${t.min}分` }),
+      ];
+      // あそびは何に使ったかの内訳も出す
+      if (c.id === 'play') {
+        row.push(el('span', {
+          class: 'breakdown',
+          text: [...t.byKind].map(([k, m]) => `${kindIcon(k)}${m}分`).join('　'),
+        }));
+      }
+      return row;
+    });
+    const li = el('li', {}, [el('span', { class: 'name', text: name }), ...rows]);
     li.style.setProperty('--nc', nameColor(name));
     return li;
   }));
@@ -812,7 +854,7 @@ function renderHistory(now) {
   $('#no-history').hidden = done.length > 0;
   $('#history').hidden = done.length === 0;
 
-  $('#history tbody').replaceChildren(...done.map((s) => {
+  setChildren($('#history tbody'), ...done.map((s) => {
     const actual = elapsedMin(s, now);
     const planned = s.minutes + s.extended;
     const diffCls = actual > planned ? 'num over' : actual < planned ? 'num under' : 'num';
@@ -869,7 +911,9 @@ function tick() {
     if (lastAlarmSpeech.id !== over.id || now - lastAlarmSpeech.at >= ALARM_REPEAT_MS) {
       lastAlarmSpeech = { id: over.id, at: now };
       const kind = findKind(over.kind);
-      speak(`${over.name}さん、${kind ? kind.say + 'の' : ''}じかんが、おわったよ！ おしまいにしよう！`);
+      speak(isStudy(over)
+        ? `${over.name}さん、べんきょう${over.minutes + over.extended}分、よくがんばったね！ おつかれさま！`
+        : `${over.name}さん、${kind ? kind.say + 'の' : ''}じかんが、おわったよ！ おしまいにしよう！`);
     }
     // しゃべっている間はピピピを止めて声を聞こえやすくする
     if (!isSpeaking()) playAlarm();

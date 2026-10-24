@@ -25,7 +25,7 @@ button, input { font-family: inherit; color: inherit; }
 
 /* ---------- 背景のかざり ---------- */
 
-.deco { position: fixed; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; }
+.deco { position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: -1; overflow: hidden; }
 .deco span { position: absolute; font-size: 2.5rem; opacity: 0.35; animation: float 7s ease-in-out infinite; }
 .deco span:nth-child(1) { top: 6%; left: 4%; }
 .deco span:nth-child(2) { top: 22%; right: 6%; animation-delay: -2s; font-size: 1.8rem; }
@@ -37,8 +37,8 @@ button, input { font-family: inherit; color: inherit; }
 /* ---------- 見出し ---------- */
 
 header { text-align: center; padding: 20px 16px 12px; }
-h1 { margin: 0; font-size: 2rem; font-weight: 800; display: inline-flex; gap: 8px; align-items: center; }
-.logo { display: inline-block; animation: hop 2.4s ease-in-out infinite; }
+h1 { margin: 0; font-size: 2rem; font-weight: 800; display: inline-flex; align-items: center; }
+.logo { display: inline-block; margin-right: 8px; animation: hop 2.4s ease-in-out infinite; }
 .title {
   background: linear-gradient(90deg, #ff4d6d, #ff9e00, #3a86ff, #8338ec);
   -webkit-background-clip: text;
@@ -73,7 +73,7 @@ button { cursor: pointer; border: none; background: none; font-size: 1rem; -webk
   box-shadow: 0 4px 0 #d5d9e6;
   transition: transform 0.1s, box-shadow 0.1s;
 }
-:is(.next, .sub-btn, .running .actions button, .mic):active { transform: translateY(3px); box-shadow: 0 1px 0 #d5d9e6; }
+.next:active, .sub-btn:active, .running .actions button:active, .mic:active { transform: translateY(3px); box-shadow: 0 1px 0 #d5d9e6; }
 
 .link { color: var(--muted); font-size: 0.9rem; padding: 6px; text-decoration: underline; }
 .link.danger { color: var(--danger); }
@@ -96,7 +96,8 @@ input:focus { border-color: var(--primary); }
 .mic { background: #ffe0e6; box-shadow: 0 4px 0 #ffb3c1; color: #c9184a; }
 .mic.listening { background: #ff4d6d; color: #fff; box-shadow: 0 4px 0 #c9184a; animation: listen 1s ease-out infinite; }
 @keyframes listen { 0% { outline: 0 solid rgba(255, 77, 109, 0.5); } 100% { outline: 14px solid rgba(255, 77, 109, 0); } }
-.head-btns { display: flex; gap: 8px; }
+.head-btns { display: flex; }
+.head-btns > * + * { margin-left: 8px; }
 .mic.speak { background: #e0f0ff; box-shadow: 0 4px 0 #a9d1ff; color: #1f5fcc; font-size: 1.2rem; padding: 8px 12px; }
 .mic.speak.off { background: #f1f3fa; box-shadow: 0 4px 0 #d5d9e6; color: var(--muted); }
 .voice-status { margin: 0 0 8px; padding: 8px 12px; border-radius: 12px; background: #f1f3fa; font-size: 0.95rem; }
@@ -113,10 +114,10 @@ form { display: grid; gap: 6px; }
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 10px 8px;
   text-align: left;
 }
+.step-head > * + * { margin-left: 10px; }
 .step-head .num {
   flex: none;
   width: 30px;
@@ -142,6 +143,7 @@ form { display: grid; gap: 6px; }
   transition: all 0.35s var(--bounce);
 }
 .step.done .step-head .ans { opacity: 1; transform: scale(1); }
+.step.active .step-head .ans { display: none; }
 .step.done .step-head .ans::after { content: " ✏️"; font-size: 0.8em; }
 .step.done .step-head .num { background: var(--ok); color: #fff; }
 .step.done .step-head .num::before { content: "✓"; }
@@ -161,7 +163,7 @@ form { display: grid; gap: 6px; }
 .step-inner { overflow: hidden; min-height: 0; }
 .step-content { padding: 4px 8px 14px; display: grid; gap: 14px; }
 
-.inline { display: flex; gap: 8px; }
+.inline { display: grid; grid-template-columns: 1fr auto; grid-gap: 8px; }
 .next { flex: none; background: var(--primary); color: #fff; box-shadow: 0 4px 0 #1f5fcc; }
 .next:active { box-shadow: 0 1px 0 #1f5fcc; }
 
@@ -178,16 +180,18 @@ form { display: grid; gap: 6px; }
 }
 .boing { animation: boing 0.45s ease both !important; }
 
-.step.active :is(.kind-tiles, .name-chips, .minute-chips) > * {
+.step.active .kind-tiles > *,
+.step.active .name-chips > *,
+.step.active .minute-chips > * {
   animation: popIn 0.5s var(--bounce) both;
   animation-delay: calc(var(--i, 0) * 70ms + 120ms);
 }
 
 /* なにをする？ */
-.kind-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kind-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .kind-tiles button {
   position: relative;
-  aspect-ratio: 1 / 1.1;
+  aspect-ratio: 16 / 11;
   border-radius: 22px;
   background: var(--kc);
   color: #fff;
@@ -203,9 +207,14 @@ form { display: grid; gap: 6px; }
 .kind-tiles button .icon { font-size: 2.8rem; line-height: 1.1; }
 .kind-tiles button:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--kd); }
 .kind-tiles button.selected { outline: 4px solid var(--text); outline-offset: 3px; }
+/* aspect-ratio 非対応の古い iOS 用（対応している端末で min-height を付けると横幅まで広がってしまう） */
+@supports not (aspect-ratio: 1) {
+  .kind-tiles button { min-height: 110px; }
+}
 
 /* だれ？ */
-.name-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.name-chips { display: flex; flex-wrap: wrap; margin: -5px; }
+.name-chips > * { margin: 5px; }
 .name-chips:empty { display: none; }
 .name-chips button {
   padding: 12px 22px;
@@ -219,7 +228,8 @@ form { display: grid; gap: 6px; }
 .name-chips button.selected { outline: 4px solid var(--text); outline-offset: 2px; }
 
 /* なんぷん？ */
-.minute-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.minute-chips { display: flex; flex-wrap: wrap; justify-content: center; margin: -5px; }
+.minute-chips > * { margin: 5px; }
 .minute-chips button {
   width: 76px;
   height: 76px;
@@ -282,7 +292,7 @@ form { display: grid; gap: 6px; }
 .ring .prog { stroke: var(--kc); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
 .running li.soon .prog { stroke: var(--warn); }
 .running li.over .prog { stroke: var(--danger); }
-.ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ring-center { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-content: center; text-align: center; }
 .ring-center .emoji { font-size: 1.6rem; line-height: 1.1; }
 .ring-center .remain { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .running li.soon .remain { color: var(--warn); }
@@ -292,18 +302,20 @@ form { display: grid; gap: 6px; }
 .running .who { font-size: 1.35rem; font-weight: 800; }
 .running .what { font-weight: 700; color: var(--kd); }
 .running .meta { color: var(--muted); font-size: 0.9rem; }
-.running .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.running .actions { display: flex; flex-wrap: wrap; margin: -4px; }
+.running .actions > * { margin: 4px; }
 .running .actions button { padding: 8px 14px; }
 
 /* ---------- きょうの合計 ---------- */
 
-.totals { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.totals li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
-.totals .name { padding: 4px 14px; border-radius: 999px; background: var(--nc); color: #fff; font-weight: 800; }
+.totals { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.totals li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 10px; align-items: center; }
+.totals .name { grid-column: 1 / -1; justify-self: start; padding: 4px 14px; border-radius: 999px; background: var(--nc); color: #fff; font-weight: 800; }
 .totals .bar { height: 14px; border-radius: 999px; background: #eef0f6; overflow: hidden; }
 .totals .bar span { display: block; height: 100%; border-radius: 999px; background: var(--nc); transition: width 0.6s var(--bounce); }
 .totals .min { font-weight: 800; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-.totals .breakdown { grid-column: 2 / 4; margin-top: -8px; font-size: 0.85rem; color: var(--muted); }
+.totals .label { font-size: 0.9rem; font-weight: 700; white-space: nowrap; }
+.totals .breakdown { grid-column: 2 / -1; margin-top: -6px; font-size: 0.85rem; color: var(--muted); }
 
 /* ---------- きろく ---------- */
 
@@ -320,7 +332,10 @@ td button { padding: 2px 8px; border-radius: 8px; background: #f1f3fa; font-size
 
 .alarm {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
