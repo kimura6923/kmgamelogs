@@ -55,16 +55,30 @@ window.addEventListener('storage', (e) => {
 
 let audioCtx = null;
 
+// iPhone はマナーモード（消音スイッチ）だと Web Audio の音が消えるので、
+// 「音楽再生」扱いにしてマナーモードでも鳴るようにする（iOS 16.4 以降）
+function setAudioSession(type) {
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = type;
+  } catch (e) {
+    // 非対応なら何もしない
+  }
+}
+setAudioSession('playback');
+
 // iOS/Safari などはユーザー操作の中で AudioContext を作らないと音が出ないため、
-// 最初のタップで準備しておく
+// 最初のタップで準備しておく。iOS では touchstart/pointerdown は「ユーザー操作」と
+// みなされないので、touchend と click で行う
 function unlockAudio() {
   if (!audioCtx) {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (Ctx) audioCtx = new Ctx();
   }
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  if (audioCtx && audioCtx.state !== 'running') audioCtx.resume();
+  unlockSpeech();
 }
-document.addEventListener('pointerdown', unlockAudio);
+document.addEventListener('touchend', unlockAudio);
+document.addEventListener('click', unlockAudio);
 document.addEventListener('keydown', unlockAudio);
 
 function beep(freq, startOffset, duration, volume, type = 'square') {
@@ -129,11 +143,24 @@ if (canSpeak) {
 }
 
 const isSpeaking = () => canSpeak && speechSynthesis.speaking;
+let speechUnlocked = false;
+
+// iOS はタップの中で一度しゃべらせないと、その後タイマーなどからしゃべれないので、
+// 最初のタップで無音の読み上げをしておく
+function unlockSpeech() {
+  if (!canSpeak || speechUnlocked) return;
+  speechUnlocked = true;
+  const u = new SpeechSynthesisUtterance(' ');
+  u.volume = 0;
+  speechSynthesis.speak(u);
+}
 
 function speak(text) {
   // 音声入力中にしゃべると自分の声を聞き取ってしまうのでしゃべらない
   if (!canSpeak || !speakEnabled || recognition) return;
-  speechSynthesis.cancel();
+  // Safari は cancel() の直後の speak() を落とすことがあるので、しゃべっているときだけ止める
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+  speechSynthesis.resume();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'ja-JP';
   if (jaVoice) u.voice = jaVoice;
@@ -596,7 +623,8 @@ function applyVoice(transcript) {
   if (r.minutes) minutesInput.value = String(r.minutes);
   playPop();
 
-  const missing = [!r.kind && 'なに', !r.name && 'だれ', !r.minutes && 'なんぷん'].filter(Boolean);
+  // 先にタップで選んであった項目は「わからなかった」に入れない
+  const missing = [!selectedKind && 'なに', !formName() && 'だれ', !formMinutes() && 'なんぷん'].filter(Boolean);
   const tail = missing.length
     ? `　→ ${missing.join('・')} がわからなかったよ。えらんでね`
     : '　→ OK！';
@@ -605,8 +633,8 @@ function applyVoice(transcript) {
 }
 
 const VOICE_ERRORS = {
-  'not-allowed': 'マイクが使えません。マイクの許可と、https か localhost で開いているかを確認してください',
-  'service-not-allowed': 'このブラウザでは音声入力が使えません',
+  'not-allowed': 'マイクが使えません。マイクと音声認識の許可を確認してください（iPhone：設定 → アプリ → Safari → マイク）',
+  'service-not-allowed': '音声入力が使えません。iPhone の場合は 設定 → 一般 → キーボード →「音声入力」をオンにしてください',
   'no-speech': 'きこえなかったよ。もう一度どうぞ',
   'audio-capture': 'マイクが見つかりません',
   network: '音声入力にはインターネット接続が必要です',
@@ -621,23 +649,29 @@ if (SpeechRecognition) {
       return;
     }
     if (canSpeak) speechSynthesis.cancel();
+    // マイクを使う間は録音もできる設定に切り替える
+    setAudioSession('play-and-record');
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
     recognition.continuous = false;
+    let heard = '';
 
     recognition.onresult = (e) => {
-      const transcript = [...e.results].map((r) => r[0].transcript).join('');
-      if (e.results[e.results.length - 1].isFinal) applyVoice(transcript);
-      else setVoiceStatus(`「${transcript}」`);
+      heard = [...e.results].map((r) => r[0].transcript).join('');
+      setVoiceStatus(`「${heard}」`);
     };
     recognition.onerror = (e) => {
       if (e.error !== 'aborted') setVoiceStatus(VOICE_ERRORS[e.error] || `音声入力でエラーが起きました（${e.error}）`, true);
     };
+    // iPhone では isFinal が来ないまま終わることがあるので、終わったときに最後に聞こえた文を使う。
+    // 聞き取り中は読み上げしないので、ここで反映すると次の問いかけもしゃべれる
     recognition.onend = () => {
       recognition = null;
+      setAudioSession('playback');
       voiceBtn.classList.remove('listening');
       voiceBtn.textContent = VOICE_LABEL;
+      if (heard.trim()) applyVoice(heard.trim());
     };
 
     recognition.start();
