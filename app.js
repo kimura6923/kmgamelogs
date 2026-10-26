@@ -82,6 +82,8 @@ function unlockAudio() {
   }
   if (audioCtx && audioCtx.state !== 'running') audioCtx.resume();
   unlockSpeech();
+  // ページを開き直したときなど、止まっていたら画面ロック用のアラーム音声を再開する
+  if (!bgTargetId || bgAudio.paused) syncBgTrack();
 }
 document.addEventListener('touchend', unlockAudio);
 document.addEventListener('click', unlockAudio);
@@ -174,6 +176,85 @@ function speak(text) {
   u.rate = 1.05;
   u.pitch = 1.3;
   speechSynthesis.speak(u);
+}
+
+// ---------- 画面ロック中・別アプリ中のアラーム（iPhone 向け） ----------
+//
+// iOS はバックグラウンドでページの JavaScript を止めるが、<audio> の再生は続く。
+// alarm-track.mp3 は「無音 → 1分前の予告音 → アラーム」の音声なので、次に時間切れになる
+// タイマーの残り時間ぶん手前から再生しておけば、JavaScript が止まっていても時間ぴったりに鳴る。
+
+const TRACK_URL = 'alarm-track.mp3?v=1';
+const TRACK_ALARM_AT = 120 * 60; // tools/make-alarm-track.mjs と合わせる
+const TRACK_TAIL = 5 * 60;
+const TRACK_DRIFT_SEC = 2;
+const bgAudio = new Audio();
+bgAudio.preload = 'none';
+let bgTargetId = null;
+
+bgAudio.addEventListener('ended', () => { bgTargetId = null; });
+
+// s の時間切れにアラームが合う再生位置（秒）。120分より先・アラームの後なら null
+function trackPosition(s, now) {
+  const pos = TRACK_ALARM_AT - (s.endAt - now) / 1000;
+  return pos >= 0 && pos < TRACK_ALARM_AT + TRACK_TAIL - 1 ? pos : null;
+}
+
+function nextEnding() {
+  return state.sessions.filter(isRunning).sort((a, b) => a.endAt - b.endAt)[0] || null;
+}
+
+// この音声でアラームが鳴る（ので Web Audio のピピピは鳴らさなくてよい）か
+function bgCovers(s) {
+  return bgTargetId === s.id && !bgAudio.paused && bgAudio.readyState >= 3;
+}
+
+function setMediaInfo(s) {
+  try {
+    if (!('mediaSession' in navigator) || !window.MediaMetadata) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: `${s.name} さん ${kindText(s.kind)}（${fmtTime(s.endAt)} まで）`,
+      artist: 'ゲームタイマー',
+    });
+  } catch (e) {
+    // ロック画面の表示だけなので失敗しても気にしない
+  }
+}
+
+// play() はタップの中でしか呼べないので、スタート・おわる・延長・画面タップのたびに呼ぶ
+function syncBgTrack() {
+  const s = nextEnding();
+  if (!s || trackPosition(s, Date.now()) == null) {
+    bgTargetId = null;
+    bgAudio.pause();
+    return;
+  }
+  bgTargetId = s.id;
+  if (!bgAudio.getAttribute('src')) bgAudio.src = TRACK_URL;
+  const seek = () => {
+    const pos = trackPosition(s, Date.now());
+    if (pos != null) bgAudio.currentTime = pos;
+  };
+  if (bgAudio.readyState >= 1) seek();
+  else bgAudio.addEventListener('loadedmetadata', seek, { once: true });
+  const played = bgAudio.play();
+  if (played) played.catch(() => { bgTargetId = null; });
+  setMediaInfo(s);
+}
+
+// 画面を見ている間は、再生位置のずれやタイマーの入れ替わりを毎秒直す（再生中ならタップ不要）
+function correctBgTrack(now) {
+  if (!bgTargetId || bgAudio.paused || bgAudio.readyState < 1) return;
+  const s = nextEnding();
+  const pos = s ? trackPosition(s, now) : null;
+  if (pos == null) {
+    bgTargetId = null;
+    bgAudio.pause();
+    return;
+  }
+  if (s.id !== bgTargetId) setMediaInfo(s);
+  bgTargetId = s.id;
+  if (Math.abs(bgAudio.currentTime - pos) > TRACK_DRIFT_SEC) bgAudio.currentTime = pos;
 }
 
 // ---------- 画面スリープ防止 ----------
@@ -332,6 +413,7 @@ function stopSession(id) {
   s.stoppedAt = Date.now();
   save();
   render();
+  syncBgTrack();
   speak(`${s.name}さん、おつかれさま！`);
 }
 
@@ -344,6 +426,7 @@ function extendSession(id) {
   s.warned = false;
   save();
   render();
+  syncBgTrack();
   speak(`${s.name}さん、あと${EXTEND_MIN}分ね。`);
 }
 
@@ -536,6 +619,7 @@ form.addEventListener('submit', (e) => {
   const cheer = findKind(selectedKind).cat === 'study' ? 'がんばってね！' : 'たのしんでね！';
   speak(`スタート！ ${formMinutes()}分たったら、おしらせするね。${cheer}`);
   startSession(name, selectedKind, formMinutes());
+  syncBgTrack();
   resetForm({ silent: true });
 });
 
@@ -894,12 +978,14 @@ function render() {
 function tick() {
   const now = Date.now();
   let changed = false;
+  correctBgTrack(now);
 
   for (const s of state.sessions) {
     if (isRunning(s) && !s.warned && s.endAt - now <= WARN_BEFORE_MS && s.endAt > now) {
       s.warned = true;
       changed = true;
-      playWarning();
+      // アラーム音声が流れていれば予告音はそちらで鳴るので二重にしない
+      if (!bgCovers(s)) playWarning();
       speak(`${s.name}さん、あと1分だよ。`);
     }
   }
@@ -915,8 +1001,8 @@ function tick() {
         ? `${over.name}さん、べんきょう${over.minutes + over.extended}分、よくがんばったね！ おつかれさま！`
         : `${over.name}さん、${kind ? kind.say + 'の' : ''}じかんが、おわったよ！ おしまいにしよう！`);
     }
-    // しゃべっている間はピピピを止めて声を聞こえやすくする
-    if (!isSpeaking()) playAlarm();
+    // しゃべっている間はピピピを止めて声を聞こえやすくする。アラーム音声が鳴っていれば二重にしない
+    if (!isSpeaking() && !bgCovers(over)) playAlarm();
   }
   render();
 }
